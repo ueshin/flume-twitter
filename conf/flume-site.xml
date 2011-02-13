@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl"  href="configuration.xsl"?>
+
+<configuration>
+
+	<property>
+		<name>flume.plugin.classes</name>
+		<value>st.happy_camper.flume.twitter.TwitterStreamingSource</value>
+	</property>
+
+</configuration>
