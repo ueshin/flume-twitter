@@ -16,17 +16,10 @@
 package st.happy_camper.flume.twitter;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
-import com.cloudera.flume.conf.Context;
-import com.cloudera.flume.conf.FlumeConfiguration;
-import com.cloudera.flume.conf.SourceFactory.SourceBuilder;
 import com.cloudera.flume.core.Event;
 import com.cloudera.flume.core.EventImpl;
 import com.cloudera.flume.core.EventSource;
-import com.cloudera.util.Pair;
-import com.google.common.base.Preconditions;
 
 /**
  * @author ueshin
@@ -95,33 +88,6 @@ public class TwitterStreamingSource extends EventSource.Base {
             conn.close();
             conn = null;
         }
-    }
-
-    /**
-     * @return
-     */
-    public static List<Pair<String, SourceBuilder>> getSourceBuilders() {
-        List<Pair<String, SourceBuilder>> builders = new ArrayList<Pair<String, SourceBuilder>>();
-        builders.add(new Pair<String, SourceBuilder>("Twitter", new SourceBuilder() {
-
-            @Override
-            public EventSource build(Context ctx, String... args) {
-                Preconditions.checkArgument(args.length <= 2, "usage: Twitter[(name[, password])]");
-
-                FlumeConfiguration conf = FlumeConfiguration.get();
-
-                String name = conf.getTwitterName();
-                if(args.length > 0) {
-                    name = args[0];
-                }
-                String password = conf.getTwitterPW();
-                if(args.length > 1) {
-                    password = args[1];
-                }
-                return new TwitterStreamingSource(name, password);
-            }
-        }));
-        return builders;
     }
 
     /**
