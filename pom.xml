@@ -239,4 +239,17 @@
 			<url>https://repository.cloudera.com/content/repositories/releases</url>
 		</repository>
 	</repositories>
+
+	<distributionManagement>
+		<repository>
+			<id>flume-tiwtter-releases</id>
+			<url>http://ueshin.github.com/flume-twitter/releases</url>
+			<uniqueVersion>false</uniqueVersion>
+		</repository>
+		<snapshotRepository>
+			<id>flume-twitter-snapshots</id>
+			<url>http://ueshin.github.com/flume-twitter/snapshots</url>
+			<uniqueVersion>true</uniqueVersion>
+		</snapshotRepository>
+	</distributionManagement>
 </project>
