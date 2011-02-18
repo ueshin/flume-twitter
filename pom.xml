@@ -4,7 +4,7 @@
 	<artifactId>flume-twitter</artifactId>
 	<packaging>jar</packaging>
 	<name>flume-twitter</name>
-	<version>0.0.1</version>
+	<version>0.0.2-SNAPSHOT</version>
 
 	<inceptionYear>2011</inceptionYear>
 	<licenses>
