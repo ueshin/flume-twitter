@@ -18,9 +18,13 @@ package st.happy_camper.flume.twitter;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.hadoop.hbase.HBaseConfiguration;
+
 import com.cloudera.flume.conf.Context;
 import com.cloudera.flume.conf.FlumeConfiguration;
+import com.cloudera.flume.conf.SinkFactory.SinkBuilder;
 import com.cloudera.flume.conf.SourceFactory.SourceBuilder;
+import com.cloudera.flume.core.EventSink;
 import com.cloudera.flume.core.EventSource;
 import com.cloudera.util.Pair;
 import com.google.common.base.Preconditions;
@@ -55,6 +59,28 @@ public class TwitterStreamingPlugin {
                     password = args[1];
                 }
                 return new TwitterStreamingSource(name, password);
+            }
+        }));
+        return builders;
+    }
+
+    /**
+     * @return
+     */
+    public static List<Pair<String, SinkBuilder>> getSinkBuilders() {
+        List<Pair<String, SinkBuilder>> builders = new ArrayList<Pair<String, SinkBuilder>>();
+        builders.add(new Pair<String, SinkBuilder>("TwitterToHBase", new SinkBuilder() {
+
+            @Override
+            public EventSink build(Context context, String... args) {
+                Preconditions.checkArgument(args.length <= 1, "usage: TwitterToHBase[(tableName)]");
+
+                FlumeConfiguration conf = FlumeConfiguration.get();
+                String tableName = conf.get(TwitterStreamingHBaseSink.class.getName() + ".tableName", "timeline");
+                if(args.length > 0) {
+                    tableName = args[0];
+                }
+                return new TwitterStreamingHBaseSink(HBaseConfiguration.create(conf), tableName);
             }
         }));
         return builders;
