@@ -135,7 +135,32 @@ public class TwitterStreamingConnection {
                 if(queue != null) {
                     LOG.warn(e.getMessage(), e);
 
+                    Thread t = new Thread() {
+
+                        @Override
+                        public void run() {
+                            String line = null;
+                            do {
+                                try {
+                                    line = reader.readLine();
+                                }
+                                catch(IOException e) {
+                                    continue;
+                                }
+                            }
+                            while(line != null);
+                        }
+
+                    };
+                    t.start();
+
                     method.releaseConnection();
+
+                    try {
+                        t.join();
+                    }
+                    catch(InterruptedException ie) {
+                    }
 
                     doOpen();
                     return readLine();
