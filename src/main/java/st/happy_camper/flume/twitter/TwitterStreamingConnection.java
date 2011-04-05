@@ -139,16 +139,12 @@ public class TwitterStreamingConnection {
 
                         @Override
                         public void run() {
-                            String line = null;
-                            do {
-                                try {
-                                    line = reader.readLine();
-                                }
-                                catch(IOException e) {
-                                    continue;
-                                }
+                            try {
+                                while(reader.readLine() != null)
+                                    ;
                             }
-                            while(line != null);
+                            catch(IOException e) {
+                            }
                         }
 
                     };
@@ -186,8 +182,7 @@ public class TwitterStreamingConnection {
                     case 200: {
                         LOG.info("Connected.");
                         this.method = method;
-                        this.reader = new BufferedReader(
-                                new InputStreamReader(method.getResponseBodyAsStream(), "utf8"));
+                        this.reader = new BufferedReader(new InputStreamReader(method.getResponseBodyAsStream(), "utf8"));
                         return;
                     }
                     case 401:
