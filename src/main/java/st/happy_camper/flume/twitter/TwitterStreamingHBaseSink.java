@@ -16,12 +16,8 @@
 package st.happy_camper.flume.twitter;
 
 import java.io.ByteArrayInputStream;
-import java.io.EOFException;
 import java.io.IOException;
 import java.nio.channels.IllegalSelectorException;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Locale;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
@@ -33,6 +29,14 @@ import org.codehaus.jackson.map.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import st.happy_camper.flume.twitter.entity.Delete;
+import st.happy_camper.flume.twitter.entity.Hashtag;
+import st.happy_camper.flume.twitter.entity.Place;
+import st.happy_camper.flume.twitter.entity.Status;
+import st.happy_camper.flume.twitter.entity.Url;
+import st.happy_camper.flume.twitter.entity.User;
+import st.happy_camper.flume.twitter.entity.UserMention;
+
 import com.cloudera.flume.core.Event;
 import com.cloudera.flume.core.EventSink;
 
@@ -42,18 +46,6 @@ import com.cloudera.flume.core.EventSink;
 public class TwitterStreamingHBaseSink extends EventSink.Base {
 
     private static final Logger LOG = LoggerFactory.getLogger(TwitterStreamingHBaseSink.class);
-
-    private static final byte[] STATUS = Bytes.toBytes("status");
-
-    private static final byte[] PLACE = Bytes.toBytes("place");
-
-    private static final byte[] USER_MENTIONS = Bytes.toBytes("user_mentions");
-
-    private static final byte[] URLS = Bytes.toBytes("urls");
-
-    private static final byte[] HASHTAGS = Bytes.toBytes("hashtags");
-
-    private static final byte[] USER = Bytes.toBytes("user");
 
     private final Configuration conf;
 
@@ -102,165 +94,150 @@ public class TwitterStreamingHBaseSink extends EventSink.Base {
      */
     @Override
     public synchronized void append(Event event) throws IOException, InterruptedException {
-        JsonNode json;
+        Put put;
         try {
-            json = new ObjectMapper().readTree(new ByteArrayInputStream(event.getBody()));
+            JsonNode json = new ObjectMapper().readTree(new ByteArrayInputStream(event.getBody()));
+
+            if(json.path("delete").isMissingNode()) {
+                Status status = new Status(json);
+
+                put = new Put(makeKey(event.getTimestamp(), status.id), event.getTimestamp());
+
+                put.add(Status.FAMILY, Status.ID, Bytes.toBytes(status.id));
+                put.add(Status.FAMILY, Status.CREATED_AT, Bytes.toBytes(status.createdAt.getTime()));
+
+                put.add(Status.FAMILY, Status.SOURCE, Bytes.toBytes(status.source));
+                put.add(Status.FAMILY, Status.TEXT, Bytes.toBytes(status.text));
+                put.add(Status.FAMILY, Status.TRUNCATED, Bytes.toBytes(status.truncated));
+
+                if(status.inReplyToStatusId != null) {
+                    put.add(Status.FAMILY, Status.IN_REPLY_TO_STATUS_ID, Bytes.toBytes(status.inReplyToStatusId));
+                }
+                if(status.inReplyToUserId != null) {
+                    put.add(Status.FAMILY, Status.IN_REPLY_TO_USER_ID, Bytes.toBytes(status.inReplyToUserId));
+                }
+                if(status.inReplyToScreenName != null) {
+                    put.add(Status.FAMILY, Status.IN_REPLY_TO_SCREEN_NAME, Bytes.toBytes(status.inReplyToScreenName));
+                }
+
+                put.add(Status.FAMILY, Status.FAVORITED, Bytes.toBytes(status.favorited));
+                put.add(Status.FAMILY, Status.RETWEETED, Bytes.toBytes(status.retweeted));
+                put.add(Status.FAMILY, Status.RETWEET_COUNT, Bytes.toBytes(status.retweetCount));
+
+                Place place = status.place;
+                if(place != null) {
+                    put.add(Place.FAMILY, Place.ID, Bytes.toBytes(place.id));
+                    put.add(Place.FAMILY, Place.NAME, Bytes.toBytes(place.name));
+                    put.add(Place.FAMILY, Place.FULL_NAME, Bytes.toBytes(place.fullName));
+                    put.add(Place.FAMILY, Place.URL, Bytes.toBytes(place.url));
+                    put.add(Place.FAMILY, Place.PLACE_TYPE, Bytes.toBytes(place.placeType));
+                    put.add(Place.FAMILY, Place.COUNTRY, Bytes.toBytes(place.country));
+                    put.add(Place.FAMILY, Place.COUNTRY_CODE, Bytes.toBytes(place.countryCode));
+                    if(place.boundingBox != null) {
+                        put.add(Place.FAMILY, Place.BOUNDING_BOX, Bytes.toBytes(place.boundingBox));
+                    }
+                    if(place.boundingBoxType != null) {
+                        put.add(Place.FAMILY, Place.BOUNDING_BOX_TYPE, Bytes.toBytes(place.boundingBoxType));
+                    }
+                    put.add(Place.FAMILY, Place.ATTRIBUTES, Bytes.toBytes(place.attributes));
+                }
+
+                for(UserMention userMention : status.userMentions) {
+                    byte[] id = Bytes.toBytes(userMention.id);
+                    put.add(UserMention.FAMILY, Bytes.add(id, UserMention.ID), id);
+                    put.add(UserMention.FAMILY, Bytes.add(id, UserMention.NAME), Bytes.toBytes(userMention.name));
+                    put.add(UserMention.FAMILY, Bytes.add(id, UserMention.SCREEN_NAME), Bytes.toBytes(userMention.screenName));
+                    put.add(UserMention.FAMILY, Bytes.add(id, UserMention.INDICES), Bytes.toBytes(userMention.indices));
+                }
+
+                for(Url url : status.urls) {
+                    byte[] id = Bytes.toBytes(url.url);
+                    put.add(Url.FAMILY, Bytes.add(id, Url.URL), id);
+                    if(url.expandedUrl != null) {
+                        put.add(Url.FAMILY, Bytes.add(id, Url.EXPANDED_URL), Bytes.toBytes(url.expandedUrl));
+                    }
+                    put.add(Url.FAMILY, Bytes.add(id, Url.INDICES), Bytes.toBytes(url.indices));
+                }
+
+                for(Hashtag hashtag : status.hashtags) {
+                    put.add(Hashtag.FAMILY, Bytes.toBytes(hashtag.text), Bytes.toBytes(hashtag.indices));
+                }
+
+                User user = status.user;
+                put.add(User.FAMILY, User.ID, Bytes.toBytes(user.id));
+                put.add(User.FAMILY, User.NAME, Bytes.toBytes(user.name));
+                put.add(User.FAMILY, User.SCREEN_NAME, Bytes.toBytes(user.screenName));
+                put.add(User.FAMILY, User.CREATED_AT, Bytes.toBytes(user.createdAt.getTime()));
+                if(user.description != null) {
+                    put.add(User.FAMILY, User.DESCRIPTION, Bytes.toBytes(user.description));
+                }
+                if(user.url != null) {
+                    put.add(User.FAMILY, User.URL, Bytes.toBytes(user.url));
+                }
+
+                put.add(User.FAMILY, User.LANG, Bytes.toBytes(user.lang));
+                if(user.location != null) {
+                    put.add(User.FAMILY, User.LOCATION, Bytes.toBytes(user.location));
+                }
+                if(user.timeZone != null) {
+                    put.add(User.FAMILY, User.TIME_ZONE, Bytes.toBytes(user.timeZone));
+                }
+                if(user.utcOffset != null) {
+                    put.add(User.FAMILY, User.UTC_OFFSET, Bytes.toBytes(user.utcOffset));
+                }
+
+                put.add(User.FAMILY, User.STATUSES_COUNT, Bytes.toBytes(user.statusesCount));
+                put.add(User.FAMILY, User.FAVOURITES_COUNT, Bytes.toBytes(user.favouritesCount));
+                put.add(User.FAMILY, User.FOLLOWERS_COUNT, Bytes.toBytes(user.followersCount));
+                put.add(User.FAMILY, User.FRIENDS_COUNT, Bytes.toBytes(user.friendsCount));
+                put.add(User.FAMILY, User.LISTED_COUNT, Bytes.toBytes(user.listedCount));
+
+                put.add(User.FAMILY, User.PROFILE_IMAGE_URL, Bytes.toBytes(user.profileImageUrl));
+                put.add(User.FAMILY, User.PROFILE_BACKGROUND_IMAGE_URL, Bytes.toBytes(user.profileBackgroundImageUrl));
+                if(user.profileTextColor != null) {
+                    put.add(User.FAMILY, User.PROFILE_TEXT_COLOR, Bytes.toBytes(user.profileTextColor));
+                }
+                if(user.profileLinkColor != null) {
+                    put.add(User.FAMILY, User.PROFILE_LINK_COLOR, Bytes.toBytes(user.profileLinkColor));
+                }
+                if(user.profileSidebarFillColor != null) {
+                    put.add(User.FAMILY, User.PROFILE_SIDEBAR_FILL_COLOR, Bytes.toBytes(user.profileSidebarFillColor));
+                }
+                if(user.profileSidebarBorderColor != null) {
+                    put.add(User.FAMILY, User.PROFILE_SIDEBAR_BORDER_COLOR, Bytes.toBytes(user.profileSidebarBorderColor));
+                }
+                if(user.profileBackgroundColor != null) {
+                    put.add(User.FAMILY, User.PROFILE_BACKGROUND_COLOR, Bytes.toBytes(user.profileBackgroundColor));
+                }
+                put.add(User.FAMILY, User.PROFILE_BACKGROUND_TILE, Bytes.toBytes(user.profileBackgroundTile));
+                put.add(User.FAMILY, User.PROFILE_USE_BACKGROUND_IMAGE, Bytes.toBytes(user.profileUseBackgroundImage));
+
+                put.add(User.FAMILY, User.PROTECTED, Bytes.toBytes(user.isProtected));
+                put.add(User.FAMILY, User.FOLLOWING, Bytes.toBytes(user.following));
+                put.add(User.FAMILY, User.FOLLOW_REQUEST_SENT, Bytes.toBytes(user.followRequestSent));
+
+                put.add(User.FAMILY, User.NOTIFICATIONS, Bytes.toBytes(user.notifications));
+                put.add(User.FAMILY, User.VERIFIED, Bytes.toBytes(user.verified));
+                put.add(User.FAMILY, User.GEO_ENABLED, Bytes.toBytes(user.geoEnabled));
+                put.add(User.FAMILY, User.CONTRIBUTORS_ENABLED, Bytes.toBytes(user.contributorsEnabled));
+                put.add(User.FAMILY, User.SHOW_ALL_INLINE_MEDIA, Bytes.toBytes(user.showAllInlineMedia));
+                put.add(User.FAMILY, User.IS_TRANSLATOR, Bytes.toBytes(user.isTranslator));
+            }
+            else {
+                Delete delete = new Delete(json);
+
+                put = new Put(makeKey(event.getTimestamp(), delete.id), event.getTimestamp());
+                put.add(Delete.FAMILY, Delete.ID, Bytes.toBytes(delete.id));
+                put.add(Delete.FAMILY, Delete.USER_ID, Bytes.toBytes(delete.userId));
+            }
         }
-        catch(EOFException e) {
+        catch(Exception e) {
+            LOG.warn(e.getMessage(), e);
             return;
         }
 
-        long id = json.path("id").getLongValue();
-        Put put = null;
-        if(id > 0L) {
-            try {
-                // status
-                put = new Put(makeKey(event.getTimestamp(), id), event.getTimestamp());
-
-                put.add(STATUS, Bytes.toBytes("id"), Bytes.toBytes(id));
-                put.add(STATUS, Bytes.toBytes("created_at"), Bytes.toBytes(createdAtDateFormat().parse(json.path("created_at").getTextValue()).getTime()));
-
-                put.add(STATUS, Bytes.toBytes("source"), Bytes.toBytes(json.path("source").getTextValue()));
-                put.add(STATUS, Bytes.toBytes("text"), Bytes.toBytes(json.path("text").getTextValue()));
-                put.add(STATUS, Bytes.toBytes("truncated"), Bytes.toBytes(json.path("truncated").getBooleanValue()));
-
-                if(json.path("in_reply_to_status_id").getLongValue() > 0L) {
-                    put.add(STATUS, Bytes.toBytes("in_reply_to_status_id"), Bytes.toBytes(json.path("in_reply_to_status_id").getLongValue()));
-                }
-                if(json.path("in_reply_to_user_id").getLongValue() > 0L) {
-                    put.add(STATUS, Bytes.toBytes("in_reply_to_user_id"), Bytes.toBytes(json.path("in_reply_to_user_id").getLongValue()));
-                }
-                if(json.path("in_reply_to_screen_name").getTextValue() != null) {
-                    put.add(STATUS, Bytes.toBytes("in_reply_to_screen_name"), Bytes.toBytes(json.path("in_reply_to_screen_name").getTextValue()));
-                }
-
-                put.add(STATUS, Bytes.toBytes("favorited"), Bytes.toBytes(json.path("favorited").getBooleanValue()));
-                put.add(STATUS, Bytes.toBytes("retweeted"), Bytes.toBytes(json.path("retweeted").getBooleanValue()));
-                put.add(STATUS, Bytes.toBytes("retweet_count"), Bytes.toBytes(json.path("retweet_count").getIntValue()));
-
-                JsonNode place = json.path("place");
-                if(!place.isNull()) {
-                    put.add(PLACE, Bytes.toBytes("id"), Bytes.toBytes(place.path("id").getTextValue()));
-                    put.add(PLACE, Bytes.toBytes("name"), Bytes.toBytes(place.path("name").getTextValue()));
-                    put.add(PLACE, Bytes.toBytes("full_name"), Bytes.toBytes(place.path("full_name").getTextValue()));
-                    put.add(PLACE, Bytes.toBytes("url"), Bytes.toBytes(place.path("url").getTextValue()));
-                    put.add(PLACE, Bytes.toBytes("place_type"), Bytes.toBytes(place.path("place_type").getTextValue()));
-                    put.add(PLACE, Bytes.toBytes("country"), Bytes.toBytes(place.path("country").getTextValue()));
-                    put.add(PLACE, Bytes.toBytes("country_code"), Bytes.toBytes(place.path("country_code").getTextValue()));
-                    if(!place.path("bounding_box").isNull()) {
-                        put.add(PLACE, Bytes.toBytes("bounding_box"), Bytes.toBytes(place.path("bounding_box").path("coordinates").toString()));
-                    }
-                    if(!place.path("bounding_box").isNull()) {
-                        put.add(PLACE, Bytes.toBytes("bounding_box_type"), Bytes.toBytes(place.path("bounding_box").path("type").getTextValue()));
-                    }
-                    put.add(PLACE, Bytes.toBytes("attributes"), Bytes.toBytes(place.path("attributes").toString()));
-                }
-
-                for(JsonNode userMention : json.path("entities").path("user_mentions")) {
-                    byte[] userMentionId = Bytes.toBytes(userMention.path("id").getLongValue());
-                    put.add(USER_MENTIONS, Bytes.add(userMentionId, Bytes.toBytes("id")), userMentionId);
-                    put.add(USER_MENTIONS, Bytes.add(userMentionId, Bytes.toBytes("name")), Bytes.toBytes(userMention.path("name").getTextValue()));
-                    put.add(USER_MENTIONS, Bytes.add(userMentionId, Bytes.toBytes("screen_name")), Bytes
-                            .toBytes(userMention.path("screen_name").getTextValue()));
-                    put.add(USER_MENTIONS, Bytes.add(userMentionId, Bytes.toBytes("indices")), Bytes.toBytes(userMention.path("indices").toString()));
-                }
-
-                for(JsonNode url : json.path("entities").path("urls")) {
-                    byte[] urls = Bytes.toBytes(url.path("url").getTextValue());
-                    put.add(URLS, Bytes.add(urls, Bytes.toBytes("url")), urls);
-                    if(!url.path("expanded_url").isNull()) {
-                        put.add(URLS, Bytes.add(urls, Bytes.toBytes("expanded_url")), Bytes.toBytes(url.path("expanded_url").getTextValue()));
-                    }
-                    put.add(URLS, Bytes.add(urls, Bytes.toBytes("indices")), Bytes.toBytes(url.path("indices").toString()));
-                }
-
-                for(JsonNode hashtag : json.path("entities").path("hashtags")) {
-                    put.add(HASHTAGS, Bytes.toBytes(hashtag.path("text").getTextValue()), Bytes.toBytes(hashtag.path("indices").toString()));
-                }
-
-                JsonNode user = json.path("user");
-                put.add(USER, Bytes.toBytes("id"), Bytes.toBytes(user.path("id").getLongValue()));
-                put.add(USER, Bytes.toBytes("name"), Bytes.toBytes(user.path("name").getTextValue()));
-                put.add(USER, Bytes.toBytes("screen_name"), Bytes.toBytes(user.path("screen_name").getTextValue()));
-                put.add(USER, Bytes.toBytes("created_at"), Bytes.toBytes(createdAtDateFormat().parse(user.path("created_at").getTextValue()).getTime()));
-                if(!user.path("description").isNull()) {
-                    put.add(USER, Bytes.toBytes("description"), Bytes.toBytes(user.path("description").getTextValue()));
-                }
-                if(!user.path("url").isNull()) {
-                    put.add(USER, Bytes.toBytes("url"), Bytes.toBytes(user.path("url").getTextValue()));
-                }
-
-                put.add(USER, Bytes.toBytes("lang"), Bytes.toBytes(user.path("lang").getTextValue()));
-                if(!user.path("location").isNull()) {
-                    put.add(USER, Bytes.toBytes("location"), Bytes.toBytes(user.path("location").getTextValue()));
-                }
-                if(!user.path("time_zone").isNull()) {
-                    put.add(USER, Bytes.toBytes("time_zone"), Bytes.toBytes(user.path("time_zone").getTextValue()));
-                }
-                if(user.path("utc_offset").isNumber()) {
-                    put.add(USER, Bytes.toBytes("utc_offset"), Bytes.toBytes(user.path("utc_offset").getIntValue()));
-                }
-
-                put.add(USER, Bytes.toBytes("statuses_count"), Bytes.toBytes(user.path("statuses_count").getIntValue()));
-                put.add(USER, Bytes.toBytes("favourites_count"), Bytes.toBytes(user.path("favourites_count").getIntValue()));
-                put.add(USER, Bytes.toBytes("followers_count"), Bytes.toBytes(user.path("followers_count").getIntValue()));
-                put.add(USER, Bytes.toBytes("friends_count"), Bytes.toBytes(user.path("friends_count").getIntValue()));
-                put.add(USER, Bytes.toBytes("listed_count"), Bytes.toBytes(user.path("listed_count").getIntValue()));
-
-                put.add(USER, Bytes.toBytes("profile_image_url"), Bytes.toBytes(user.path("profile_image_url").getTextValue()));
-                put.add(USER, Bytes.toBytes("profile_background_image_url"), Bytes.toBytes(user.path("profile_background_image_url").getTextValue()));
-                if(!user.path("profile_text_color").isNull()) {
-                    put.add(USER, Bytes.toBytes("profile_text_color"), Bytes.toBytes(user.path("profile_text_color").getTextValue()));
-                }
-                if(!user.path("profile_link_color").isNull()) {
-                    put.add(USER, Bytes.toBytes("profile_link_color"), Bytes.toBytes(user.path("profile_link_color").getTextValue()));
-                }
-                if(!user.path("profile_sidebar_fill_color").isNull()) {
-                    put.add(USER, Bytes.toBytes("profile_sidebar_fill_color"), Bytes.toBytes(user.path("profile_sidebar_fill_color").getTextValue()));
-                }
-                if(!user.path("profile_sidebar_border_color").isNull()) {
-                    put.add(USER, Bytes.toBytes("profile_sidebar_border_color"), Bytes.toBytes(user.path("profile_sidebar_border_color").getTextValue()));
-                }
-                if(!user.path("profile_background_color").isNull()) {
-                    put.add(USER, Bytes.toBytes("profile_background_color"), Bytes.toBytes(user.path("profile_background_color").getTextValue()));
-                }
-                put.add(USER, Bytes.toBytes("profile_background_tile"), Bytes.toBytes(user.path("profile_background_tile").getBooleanValue()));
-                put.add(USER, Bytes.toBytes("profile_use_background_image"), Bytes.toBytes(user.path("profile_use_background_image").getBooleanValue()));
-
-                put.add(USER, Bytes.toBytes("protected"), Bytes.toBytes(user.path("protected").getBooleanValue()));
-                put.add(USER, Bytes.toBytes("following"), Bytes.toBytes(user.path("following").getBooleanValue()));
-                put.add(USER, Bytes.toBytes("follow_request_sent"), Bytes.toBytes(user.path("follow_request_sent").getBooleanValue()));
-
-                put.add(USER, Bytes.toBytes("notifications"), Bytes.toBytes(user.path("notifications").getBooleanValue()));
-                put.add(USER, Bytes.toBytes("verified"), Bytes.toBytes(user.path("verified").getBooleanValue()));
-                put.add(USER, Bytes.toBytes("geo_enabled"), Bytes.toBytes(user.path("geo_enabled").getBooleanValue()));
-                put.add(USER, Bytes.toBytes("contributors_enabled"), Bytes.toBytes(user.path("contributors_enabled").getBooleanValue()));
-                put.add(USER, Bytes.toBytes("show_all_inline_media"), Bytes.toBytes(user.path("show_all_inline_media").getBooleanValue()));
-                put.add(USER, Bytes.toBytes("is_translator"), Bytes.toBytes(user.path("is_translator").getBooleanValue()));
-            }
-            catch(ParseException e) {
-                LOG.warn(e.getMessage(), e);
-            }
-        }
-        else {
-            id = json.path("delete").path("status").path("id").getLongValue();
-            if(id > 0L) {
-                // delete
-                put = new Put(makeKey(event.getTimestamp(), id), event.getTimestamp());
-
-                byte[] cfDelete = Bytes.toBytes("delete");
-                put.add(cfDelete, Bytes.toBytes("id"), Bytes.toBytes(id));
-                put.add(cfDelete, Bytes.toBytes("user_id"), Bytes.toBytes(json.path("delete").path("status").path("user_id").getLongValue()));
-            }
-        }
-
         if(table != null) {
-            if(put != null) {
-                table.put(put);
-            }
-            else {
-                LOG.warn(json.toString());
-            }
+            table.put(put);
         }
         else {
             throw new IllegalStateException();
@@ -290,13 +267,6 @@ public class TwitterStreamingHBaseSink extends EventSink.Base {
      */
     private byte[] makeKey(long ts, long id) {
         return Bytes.add(new byte[] { (byte) (ts & 0x0f) }, Bytes.toBytes(Long.MAX_VALUE - ts), Bytes.toBytes(id));
-    }
-
-    /**
-     * @return
-     */
-    private SimpleDateFormat createdAtDateFormat() {
-        return new SimpleDateFormat("EEE MMM dd HH:mm:ss Z yyyy", Locale.US);
     }
 
 }
