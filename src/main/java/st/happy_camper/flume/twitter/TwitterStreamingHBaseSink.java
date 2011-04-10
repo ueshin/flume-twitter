@@ -101,7 +101,7 @@ public class TwitterStreamingHBaseSink extends EventSink.Base {
             if(json.path("delete").isMissingNode()) {
                 Status status = new Status(json);
 
-                put = new Put(makeKey(event.getTimestamp(), status.id), event.getTimestamp());
+                put = new Put(Bytes.add(Bytes.toBytes(status.user.id), Bytes.toBytes(Long.MAX_VALUE - status.id)), event.getTimestamp());
 
                 put.add(Status.FAMILY, Status.ID, Bytes.toBytes(status.id));
                 put.add(Status.FAMILY, Status.CREATED_AT, Bytes.toBytes(status.createdAt.getTime()));
@@ -226,7 +226,7 @@ public class TwitterStreamingHBaseSink extends EventSink.Base {
             else {
                 Delete delete = new Delete(json);
 
-                put = new Put(makeKey(event.getTimestamp(), delete.id), event.getTimestamp());
+                put = new Put(Bytes.add(Bytes.toBytes(delete.userId), Bytes.toBytes(Long.MAX_VALUE - delete.id)), event.getTimestamp());
                 put.add(Delete.FAMILY, Delete.ID, Bytes.toBytes(delete.id));
                 put.add(Delete.FAMILY, Delete.USER_ID, Bytes.toBytes(delete.userId));
             }
@@ -258,15 +258,6 @@ public class TwitterStreamingHBaseSink extends EventSink.Base {
                 table = null;
             }
         }
-    }
-
-    /**
-     * @param ts
-     * @param id
-     * @return
-     */
-    private byte[] makeKey(long ts, long id) {
-        return Bytes.add(new byte[] { (byte) (ts & 0x0f) }, Bytes.toBytes(Long.MAX_VALUE - ts), Bytes.toBytes(id));
     }
 
 }
