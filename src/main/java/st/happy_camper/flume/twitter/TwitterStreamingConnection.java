@@ -40,7 +40,7 @@ public class TwitterStreamingConnection {
 
     private static final Logger LOG = LoggerFactory.getLogger(TwitterStreamingConnection.class);
 
-    private static final String URL = "http://stream.twitter.com/1/statuses/sample.json";
+    private static final String URL = "https://stream.twitter.com/1/statuses/sample.json";
 
     private final Random rnd = new Random();
 
