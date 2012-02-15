@@ -30,13 +30,17 @@ public class TwitterStreamingSource extends EventSource.Base {
 
     private final String password;
 
+    private final int connectionTimeout;
+
     /**
      * @param name
      * @param password
+     * @param connectionTimeout
      */
-    public TwitterStreamingSource(String name, String password) {
+    public TwitterStreamingSource(String name, String password, int connectionTimeout) {
         this.name = name;
         this.password = password;
+        this.connectionTimeout = connectionTimeout;
     }
 
     private TwitterStreamingConnection conn;
@@ -48,7 +52,7 @@ public class TwitterStreamingSource extends EventSource.Base {
     @Override
     public synchronized void open() throws IOException {
         if(conn == null) {
-            conn = new TwitterStreamingConnection(name, password);
+            conn = new TwitterStreamingConnection(name, password, connectionTimeout);
         }
         else {
             throw new IllegalStateException();
@@ -95,15 +99,19 @@ public class TwitterStreamingSource extends EventSource.Base {
      * @throws IOException
      */
     public static void main(String... args) throws IOException {
-        if(args.length != 2) {
-            System.err.println("Usage: TwitterStreamingSource name password");
+        if(args.length < 2) {
+            System.err.println("Usage: TwitterStreamingSource name password [connectionTimeout]");
             System.exit(-1);
         }
 
         String name = args[0];
         String password = args[1];
+        int connectionTimeout = 1000; // ms
+        if(args.length > 2) {
+            connectionTimeout = Integer.parseInt(args[2]);
+        }
 
-        final TwitterStreamingSource src = new TwitterStreamingSource(name, password);
+        final TwitterStreamingSource src = new TwitterStreamingSource(name, password, connectionTimeout);
 
         src.open();
 

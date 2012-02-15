@@ -46,7 +46,7 @@ public class TwitterStreamingPlugin {
 
             @Override
             public EventSource build(Context ctx, String... args) {
-                Preconditions.checkArgument(args.length <= 2, "usage: Twitter[(name[, password])]");
+                Preconditions.checkArgument(args.length <= 3, "usage: Twitter[(name[, password[, connectionTimeout]])]");
 
                 FlumeConfiguration conf = FlumeConfiguration.get();
 
@@ -58,7 +58,11 @@ public class TwitterStreamingPlugin {
                 if(args.length > 1) {
                     password = args[1];
                 }
-                return new TwitterStreamingSource(name, password);
+                int connectionTimeout = 1000; // ms
+                if(args.length > 2) {
+                    connectionTimeout = Integer.parseInt(args[1]);
+                }
+                return new TwitterStreamingSource(name, password, connectionTimeout);
             }
         }));
         return builders;

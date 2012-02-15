@@ -55,11 +55,12 @@ public class TwitterStreamingConnection {
     /**
      * @param name
      * @param password
+     * @param connectionTimeout
      * @throws IOException
      */
-    public TwitterStreamingConnection(String name, String password) throws IOException {
+    public TwitterStreamingConnection(String name, String password, int connectionTimeout) throws IOException {
         httpClient = new HttpClient();
-        httpClient.getHttpConnectionManager().getParams().setConnectionTimeout(1000);
+        httpClient.getHttpConnectionManager().getParams().setConnectionTimeout(connectionTimeout);
         httpClient.getHttpConnectionManager().getParams().setSoTimeout(10 * 1000);
         httpClient.getParams().setAuthenticationPreemptive(true);
         httpClient.getState().setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(name, password));
