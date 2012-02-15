@@ -14,6 +14,9 @@ Build it as follows:
 
 You will find a packaged jar file in `target` directory.
 
+You can also download the packaged files from the following URL.  
+https://github.com/ueshin/flume-twitter/tree/gh-pages/releases/st/happy_camper/flume/flume-twitter
+
 ## How to install
 
 Put the jar file into ${FLUME_HOME}/lib directory or add to `FLUME_CLASSPATH`.
@@ -33,7 +36,7 @@ Restart flume processes then you will see "Twitter" source in "extn" page of Flu
 
 Configure "Twitter" source as follows:
 
-    Twitter("<your twitter id>", "<password>")
+    Twitter("<your twitter id>", "<password>"[, <connectionTimeout[ms]>])
 
 and any sink.
 
